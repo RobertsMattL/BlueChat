@@ -17,6 +17,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.codeflow.bluechat.ui.ChatScreen
 import com.codeflow.bluechat.ui.SettingsDialog
+import com.codeflow.bluechat.ui.theme.BlueChatTheme
 import com.codeflow.bluechat.viewmodel.ChatViewModel
 
 class ComposeActivity : ComponentActivity() {
@@ -47,7 +48,7 @@ class ComposeActivity : ComponentActivity() {
         requestBluetoothPermissions()
 
         setContent {
-            MaterialTheme {
+            BlueChatTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
