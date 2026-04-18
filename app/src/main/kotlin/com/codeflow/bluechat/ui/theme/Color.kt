@@ -13,6 +13,6 @@ val LightSilver = Color(0xFF9E9E9E)
 val White = Color(0xFFE0E0E0)
 val BrightWhite = Color(0xFFFFFFFF)
 
-// Accent colors for message bubbles
-val DarkBlue = Color(0xFF1A237E)
-val DarkCyan = Color(0xFF006064)
+// Additional shades for variety
+val CharcoalGray = Color(0xFF303030)
+val SlateGray = Color(0xFF616161)

@@ -35,10 +35,10 @@ private val DarkColorScheme = darkColorScheme(
     onSurfaceVariant = LightSilver,
 
     // Other colors
-    error = Color(0xFFCF6679),
+    error = Silver,
     onError = Black,
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
+    errorContainer = Gray,
+    onErrorContainer = White,
 
     outline = Silver,
     outlineVariant = Gray,
