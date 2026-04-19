@@ -16,7 +16,7 @@
         android:name=".CodeFlowApplication"
         android:allowBackup="true"
         android:label="@string/app_name"
-        android:theme="@style/Theme.Material3.Dark">
+        android:theme="@style/Theme.BlueChat">
         <activity
             android:name=".ComposeActivity"
             android:exported="true">

@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 object MessageChunker {
 
     private const val TAG = "MessageChunker"
+
     // BLE advertising limits:
     // - Total packet: 31 bytes max (legacy advertising)
     // - Service UUID overhead: ~16 bytes
@@ -46,11 +47,13 @@ object MessageChunker {
         val messageId = message.contentHashCode()
         val totalChunks = ((message.size + MAX_CHUNK_SIZE - 1) / MAX_CHUNK_SIZE).coerceAtMost(255)
 
-        CodeFlowLogger.debug(TAG, "Chunking message", mapOf(
-            "message_id" to messageId,
-            "message_size" to message.size,
-            "total_chunks" to totalChunks
-        ))
+        CodeFlowLogger.debug(
+            TAG, "Chunking message ${message.size} chunks: ${totalChunks}", mapOf(
+                "message_id" to messageId,
+                "message_size" to message.size,
+                "total_chunks" to totalChunks
+            )
+        )
 
         val chunks = mutableListOf<ByteArray>()
 
@@ -69,10 +72,12 @@ object MessageChunker {
             chunks.add(chunk)
         }
 
-        CodeFlowLogger.info(TAG, "Message chunked successfully", mapOf(
-            "message_id" to messageId,
-            "chunks_created" to chunks.size
-        ))
+        CodeFlowLogger.info(
+            TAG, "Message chunked successfully", mapOf(
+                "message_id" to messageId,
+                "chunks_created" to chunks.size
+            )
+        )
 
         return chunks
     }
@@ -94,6 +99,12 @@ object MessageChunker {
             val payload = ByteArray(data.size - HEADER_SIZE)
             buffer.get(payload)
 
+
+            CodeFlowLogger.warning(
+                TAG,
+                "message ID: $messageId, chunk index: $chunkIndex, total chunks: $totalChunks, payload size: ${payload.size}"
+            )
+
             ChunkedMessage(messageId, chunkIndex, totalChunks, payload)
         } catch (e: Exception) {
             CodeFlowLogger.error(TAG, "Failed to parse chunk", e)
@@ -108,11 +119,13 @@ object MessageChunker {
     fun addChunk(chunk: ChunkedMessage): ByteArray? {
         val messageId = chunk.messageId
 
-        CodeFlowLogger.debug(TAG, "Received chunk", mapOf(
-            "message_id" to messageId,
-            "chunk_index" to chunk.chunkIndex,
-            "total_chunks" to chunk.totalChunks
-        ))
+        CodeFlowLogger.debug(
+            TAG, "Received chunk", mapOf(
+                "message_id" to messageId,
+                "chunk_index" to chunk.chunkIndex,
+                "total_chunks" to chunk.totalChunks
+            )
+        )
 
         // Initialize storage for this message
         val chunks = receivedChunks.getOrPut(messageId) { ConcurrentHashMap() }
@@ -128,10 +141,12 @@ object MessageChunker {
 
         // Check if we have all chunks
         if (metadata.receivedCount >= metadata.totalChunks) {
-            CodeFlowLogger.info(TAG, "All chunks received, reassembling message", mapOf(
-                "message_id" to messageId,
-                "total_chunks" to metadata.totalChunks
-            ))
+            CodeFlowLogger.info(
+                TAG, "All chunks received, reassembling message", mapOf(
+                    "message_id" to messageId,
+                    "total_chunks" to metadata.totalChunks
+                )
+            )
 
             // Reassemble the message
             val totalSize = chunks.values.sumOf { it.size }
@@ -141,10 +156,12 @@ object MessageChunker {
             for (i in 0 until metadata.totalChunks) {
                 val chunkData = chunks[i]
                 if (chunkData == null) {
-                    CodeFlowLogger.error(TAG, "Missing chunk during reassembly", null, mapOf(
-                        "message_id" to messageId,
-                        "missing_chunk" to i
-                    ))
+                    CodeFlowLogger.error(
+                        TAG, "Missing chunk during reassembly", null, mapOf(
+                            "message_id" to messageId,
+                            "missing_chunk" to i
+                        )
+                    )
                     return null
                 }
                 System.arraycopy(chunkData, 0, completeMessage, offset, chunkData.size)
@@ -155,10 +172,12 @@ object MessageChunker {
             receivedChunks.remove(messageId)
             chunkMetadata.remove(messageId)
 
-            CodeFlowLogger.info(TAG, "Message reassembled successfully", mapOf(
-                "message_id" to messageId,
-                "total_size" to completeMessage.size
-            ))
+            CodeFlowLogger.info(
+                TAG, "Message reassembled successfully", mapOf(
+                    "message_id" to messageId,
+                    "total_size" to completeMessage.size
+                )
+            )
 
             return completeMessage
         }

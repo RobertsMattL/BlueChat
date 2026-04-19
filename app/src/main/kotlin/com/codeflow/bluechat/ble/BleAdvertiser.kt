@@ -1,5 +1,6 @@
 package com.codeflow.bluechat.ble
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.AdvertiseCallback
@@ -23,6 +24,7 @@ import javax.crypto.spec.SecretKeySpec
  * Manages BLE advertising for broadcasting encrypted chat messages.
  * Messages are chunked and broadcast sequentially through BLE advertising packets.
  */
+@SuppressLint("MissingPermission")
 class BleAdvertiser(
     private val context: Context,
     private val secretKey: SecretKeySpec
@@ -132,6 +134,10 @@ class BleAdvertiser(
                 "total_size_with_overhead" to (chunk.size + 16) // Approx BLE overhead
             ))
 
+            // Any prior advertisement must be stopped before a new startAdvertising call,
+            // otherwise the BLE stack returns ADVERTISE_FAILED_ALREADY_STARTED for every chunk after the first.
+            stopAdvertising()
+
             // Create a deferred result to wait for the callback
             currentAdvertiseResult = CompletableDeferred()
 
@@ -162,12 +168,16 @@ class BleAdvertiser(
 
             if (result == null) {
                 CodeFlowLogger.warning(TAG, "Advertising callback timeout")
+                bleAdvertiser?.stopAdvertising(advertiseCallback)
+                isAdvertising = false
                 return false
             }
 
             if (result) {
-                // Wait for the chunk to be advertised
+                // Leave the chunk on-air briefly so scanners can pick it up
                 delay(500)
+                bleAdvertiser?.stopAdvertising(advertiseCallback)
+                isAdvertising = false
             }
 
             result
