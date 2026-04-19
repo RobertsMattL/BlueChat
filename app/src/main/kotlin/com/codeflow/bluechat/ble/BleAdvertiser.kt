@@ -14,6 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import javax.crypto.spec.SecretKeySpec
 
@@ -38,9 +40,13 @@ class BleAdvertiser(
     private var currentAdvertiseJob: Job? = null
     private var isAdvertising = false
 
+    // For tracking advertising callback results
+    private var currentAdvertiseResult: CompletableDeferred<Boolean>? = null
+
     private val advertiseCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
             CodeFlowLogger.info(TAG, "BLE advertising started successfully")
+            currentAdvertiseResult?.complete(true)
         }
 
         override fun onStartFailure(errorCode: Int) {
@@ -49,6 +55,7 @@ class BleAdvertiser(
                 "error_message" to getErrorMessage(errorCode)
             ))
             isAdvertising = false
+            currentAdvertiseResult?.complete(false)
         }
     }
 
@@ -120,6 +127,14 @@ class BleAdvertiser(
      */
     private suspend fun advertiseChunk(chunk: ByteArray): Boolean {
         return try {
+            CodeFlowLogger.debug(TAG, "Advertising chunk", mapOf(
+                "chunk_size" to chunk.size,
+                "total_size_with_overhead" to (chunk.size + 16) // Approx BLE overhead
+            ))
+
+            // Create a deferred result to wait for the callback
+            currentAdvertiseResult = CompletableDeferred()
+
             // Create advertise settings
             val settings = AdvertiseSettings.Builder()
                 .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
@@ -140,13 +155,27 @@ class BleAdvertiser(
             bleAdvertiser?.startAdvertising(settings, data, advertiseCallback)
             isAdvertising = true
 
-            // Wait for the chunk to be advertised
-            delay(500)
+            // Wait for the callback with a timeout
+            val result = withTimeoutOrNull(1000) {
+                currentAdvertiseResult?.await() ?: false
+            }
 
-            true
+            if (result == null) {
+                CodeFlowLogger.warning(TAG, "Advertising callback timeout")
+                return false
+            }
+
+            if (result) {
+                // Wait for the chunk to be advertised
+                delay(500)
+            }
+
+            result
         } catch (e: Exception) {
             CodeFlowLogger.error(TAG, "Failed to advertise chunk", e)
             false
+        } finally {
+            currentAdvertiseResult = null
         }
     }
 

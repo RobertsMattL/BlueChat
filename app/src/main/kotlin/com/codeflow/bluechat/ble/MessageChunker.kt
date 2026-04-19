@@ -14,7 +14,12 @@ import java.util.concurrent.ConcurrentHashMap
 object MessageChunker {
 
     private const val TAG = "MessageChunker"
-    private const val MAX_CHUNK_SIZE = 25 // bytes available for actual data
+    // BLE advertising limits:
+    // - Total packet: 31 bytes max (legacy advertising)
+    // - Service UUID overhead: ~16 bytes
+    // - Header (msg ID + chunk idx + total): 6 bytes
+    // - Available for data: 31 - 16 - 6 = 9 bytes (using 12 to be safe with extended advertising)
+    private const val MAX_CHUNK_SIZE = 12 // bytes available for actual data
     private const val HEADER_SIZE = 6 // 4 bytes msg ID + 1 byte chunk index + 1 byte total
 
     private val receivedChunks = ConcurrentHashMap<Int, MutableMap<Int, ByteArray>>()
