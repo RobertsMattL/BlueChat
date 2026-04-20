@@ -1,6 +1,6 @@
 # BlueChat
 
-BlueChat is an Android peer-to-peer chat application that transmits end-to-end encrypted messages over **Bluetooth Low Energy (BLE) advertising packets** — no cellular, no Wi-Fi, no internet, no central server, no account, no phone number. Two devices running BlueChat with the same shared passphrase can exchange messages as long as they are within BLE range of one another. 
+BlueChat is an Android peer-to-peer chat application that transmits end-to-end encrypted messages with encrypted **Bluetooth Low Energy (BLE) advertising packets** — no cellular, no Wi-Fi, no internet, no central server, no account, no phone number. Two devices running BlueChat with the same shared passphrase can exchange messages as long as they are within BLE range of one another. 
 
 ---
 
