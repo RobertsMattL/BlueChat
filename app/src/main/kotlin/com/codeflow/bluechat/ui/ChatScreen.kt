@@ -1,12 +1,16 @@
 package com.codeflow.bluechat.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -30,6 +34,8 @@ fun ChatScreen(
     bleStatus: String,
     errorMessage: String?,
     onSendMessage: (String) -> Unit,
+    onResendMessage: (String) -> Unit,
+    onDeleteMessage: (String) -> Unit,
     onClearError: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
@@ -98,6 +104,8 @@ fun ChatScreen(
                 MessageList(
                     messages = messages,
                     listState = listState,
+                    onResendMessage = onResendMessage,
+                    onDeleteMessage = onDeleteMessage,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -158,6 +166,8 @@ fun MessageInput(
 fun MessageList(
     messages: List<ChatMessage>,
     listState: androidx.compose.foundation.lazy.LazyListState,
+    onResendMessage: (String) -> Unit,
+    onDeleteMessage: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -167,7 +177,11 @@ fun MessageList(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(messages, key = { it.id }) { message ->
-            MessageBubble(message)
+            MessageBubble(
+                message = message,
+                onResend = { onResendMessage(message.id) },
+                onDelete = { onDeleteMessage(message.id) }
+            )
         }
     }
 }
@@ -175,8 +189,11 @@ fun MessageList(
 /**
  * Individual message bubble.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun MessageBubble(message: ChatMessage) {
+fun MessageBubble(message: ChatMessage, onResend: () -> Unit, onDelete: () -> Unit) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (message.isOutgoing) {
@@ -185,49 +202,83 @@ fun MessageBubble(message: ChatMessage) {
             Arrangement.Start
         }
     ) {
-        Card(
-            modifier = Modifier
-                .widthIn(max = 280.dp)
-                .padding(
-                    start = if (message.isOutgoing) 64.dp else 0.dp,
-                    end = if (message.isOutgoing) 0.dp else 64.dp
+        Box {
+            Card(
+                modifier = Modifier
+                    .widthIn(max = 280.dp)
+                    .padding(
+                        start = if (message.isOutgoing) 64.dp else 0.dp,
+                        end = if (message.isOutgoing) 0.dp else 64.dp
+                    )
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = { menuExpanded = true }
+                    ),
+                shape = RoundedCornerShape(
+                    topStart = 16.dp,
+                    topEnd = 16.dp,
+                    bottomStart = if (message.isOutgoing) 16.dp else 4.dp,
+                    bottomEnd = if (message.isOutgoing) 4.dp else 16.dp
                 ),
-            shape = RoundedCornerShape(
-                topStart = 16.dp,
-                topEnd = 16.dp,
-                bottomStart = if (message.isOutgoing) 16.dp else 4.dp,
-                bottomEnd = if (message.isOutgoing) 4.dp else 16.dp
-            ),
-            colors = CardDefaults.cardColors(
-                containerColor = if (message.isOutgoing) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.secondaryContainer
-                }
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp)
-            ) {
-                Text(
-                    text = message.content,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (message.isOutgoing) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
+                colors = CardDefaults.cardColors(
+                    containerColor = if (message.isOutgoing) {
+                        MaterialTheme.colorScheme.primaryContainer
                     } else {
-                        MaterialTheme.colorScheme.onSecondaryContainer
+                        MaterialTheme.colorScheme.secondaryContainer
                     }
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = formatTimestamp(message.timestamp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (message.isOutgoing) {
-                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-                    } else {
-                        MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp)
+                ) {
+                    Text(
+                        text = message.content,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (message.isOutgoing) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = formatTimestamp(message.timestamp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (message.isOutgoing) {
+                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                        } else {
+                            MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+                        },
+                        modifier = Modifier.align(Alignment.End)
+                    )
+                }
+            }
+
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false }
+            ) {
+                if (message.isOutgoing) {
+                    DropdownMenuItem(
+                        text = { Text("Resend") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            onResend()
+                        }
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("Delete") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Delete, contentDescription = null)
                     },
-                    modifier = Modifier.align(Alignment.End)
+                    onClick = {
+                        menuExpanded = false
+                        onDelete()
+                    }
                 )
             }
         }

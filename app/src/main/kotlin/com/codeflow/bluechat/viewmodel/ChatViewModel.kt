@@ -98,6 +98,62 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Resends an existing outgoing message by rebroadcasting it over BLE.
+     */
+    fun resendMessage(messageId: String) {
+        val message = _messages.value.firstOrNull { it.id == messageId }
+        if (message == null) {
+            CodeFlowLogger.warning(TAG, "Resend requested for unknown message", mapOf(
+                "message_id" to messageId
+            ))
+            return
+        }
+        if (!message.isOutgoing) {
+            CodeFlowLogger.warning(TAG, "Resend rejected for incoming message", mapOf(
+                "message_id" to messageId
+            ))
+            return
+        }
+
+        CodeFlowLogger.info(TAG, "Resending message", mapOf(
+            "message_id" to messageId,
+            "message_length" to message.content.length
+        ))
+
+        viewModelScope.launch {
+            bleAdvertiser?.broadcastMessage(message.content) { success ->
+                if (!success) {
+                    _errorMessage.value = "Failed to resend message via BLE"
+                    CodeFlowLogger.error(TAG, "Failed to rebroadcast message", null, mapOf(
+                        "message_id" to messageId
+                    ))
+                } else {
+                    CodeFlowLogger.info(TAG, "Message resent successfully", mapOf(
+                        "message_id" to messageId
+                    ))
+                }
+            }
+        }
+    }
+
+    /**
+     * Deletes a message from the local conversation (does not affect remote peers).
+     */
+    fun deleteMessage(messageId: String) {
+        val existed = _messages.value.any { it.id == messageId }
+        if (!existed) {
+            CodeFlowLogger.warning(TAG, "Delete requested for unknown message", mapOf(
+                "message_id" to messageId
+            ))
+            return
+        }
+        CodeFlowLogger.info(TAG, "Deleting message", mapOf(
+            "message_id" to messageId
+        ))
+        _messages.value = _messages.value.filterNot { it.id == messageId }
+    }
+
+    /**
      * Handles a received message from BLE.
      */
     private fun handleReceivedMessage(content: String) {

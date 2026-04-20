@@ -140,6 +140,8 @@ fun BlueChatApp(viewModel: ChatViewModel) {
         bleStatus = bleStatus.name,
         errorMessage = errorMessage,
         onSendMessage = { viewModel.sendMessage(it) },
+        onResendMessage = { viewModel.resendMessage(it) },
+        onDeleteMessage = { viewModel.deleteMessage(it) },
         onClearError = { viewModel.clearError() },
         onSettingsClick = { showSettings = true }
     )
