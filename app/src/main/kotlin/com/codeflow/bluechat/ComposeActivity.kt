@@ -129,6 +129,7 @@ class ComposeActivity : ComponentActivity() {
 @Composable
 fun BlueChatApp(viewModel: ChatViewModel) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
+    val receivingMessages by viewModel.receivingMessages.collectAsStateWithLifecycle()
     val bleStatus by viewModel.bleStatus.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val passphrase by viewModel.passphrase.collectAsStateWithLifecycle()
@@ -137,6 +138,7 @@ fun BlueChatApp(viewModel: ChatViewModel) {
 
     ChatScreen(
         messages = messages,
+        receivingMessages = receivingMessages.values.sortedBy { it.startedAt },
         bleStatus = bleStatus.name,
         errorMessage = errorMessage,
         onSendMessage = { viewModel.sendMessage(it) },

@@ -20,3 +20,13 @@ enum class BleStatus {
     ADVERTISING,
     BOTH
 }
+
+/**
+ * Represents an incoming chunked message currently being reassembled.
+ */
+data class ReceivingMessage(
+    val messageId: Int,
+    val receivedChunks: Int,
+    val totalChunks: Int,
+    val startedAt: Long = System.currentTimeMillis()
+)

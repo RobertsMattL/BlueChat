@@ -25,7 +25,8 @@ import javax.crypto.spec.SecretKeySpec
 class BleScanner(
     private val context: Context,
     private val secretKey: SecretKeySpec,
-    private val onMessageReceived: (String) -> Unit
+    private val onMessageReceived: (String?, Int) -> Unit,
+    private val onChunkProgress: (messageId: Int, received: Int, total: Int) -> Unit = { _, _, _ -> }
 ) {
     private val TAG = "BleScanner"
 
@@ -138,9 +139,14 @@ class BleScanner(
             }
 
             // Add chunk and check if message is complete
-            val completeMessage = MessageChunker.addChunk(chunk)
-            if (completeMessage != null) {
-                processCompleteMessage(completeMessage)
+            when (val result = MessageChunker.addChunk(chunk)) {
+                is MessageChunker.ChunkResult.InProgress -> {
+                    onChunkProgress(result.messageId, result.receivedChunks, result.totalChunks)
+                }
+                is MessageChunker.ChunkResult.Complete -> {
+                    processCompleteMessage(result.data, result.messageId)
+                }
+                null -> Unit
             }
         } catch (e: Exception) {
             CodeFlowLogger.error(TAG, "Error handling scan result", e)
@@ -150,13 +156,14 @@ class BleScanner(
     /**
      * Processes a complete reassembled message.
      */
-    private fun processCompleteMessage(messageBytes: ByteArray) {
+    private fun processCompleteMessage(messageBytes: ByteArray, messageId: Int) {
         try {
             // Convert to string (this is the encrypted base64 data)
             val encryptedMessage = String(messageBytes, Charsets.UTF_8)
 
             CodeFlowLogger.info(TAG, "Complete message received, decrypting", mapOf(
-                "encrypted_length" to encryptedMessage.length
+                "encrypted_length" to encryptedMessage.length,
+                "message_id" to messageId
             ))
 
             // Decrypt the message
@@ -167,14 +174,21 @@ class BleScanner(
 
             if (decryptedMessage != null) {
                 CodeFlowLogger.info(TAG, "Message decrypted successfully", mapOf(
-                    "message_length" to decryptedMessage.length
+                    "message_length" to decryptedMessage.length,
+                    "message_id" to messageId
                 ))
-                onMessageReceived(decryptedMessage)
+                onMessageReceived(decryptedMessage, messageId)
             } else {
-                CodeFlowLogger.error(TAG, "Failed to decrypt message", null)
+                CodeFlowLogger.error(TAG, "Failed to decrypt message", null, mapOf(
+                    "message_id" to messageId
+                ))
+                onMessageReceived(null, messageId)
             }
         } catch (e: Exception) {
-            CodeFlowLogger.error(TAG, "Error processing complete message", e)
+            CodeFlowLogger.error(TAG, "Error processing complete message", e, mapOf(
+                "message_id" to messageId
+            ))
+            onMessageReceived(null, messageId)
         }
     }
 

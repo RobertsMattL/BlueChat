@@ -26,6 +26,11 @@ object MessageChunker {
     private val receivedChunks = ConcurrentHashMap<Int, MutableMap<Int, ByteArray>>()
     private val chunkMetadata = ConcurrentHashMap<Int, ChunkMetadata>()
 
+    // Tracks recently completed message IDs so late-arriving duplicate chunks
+    // don't spawn a fresh "in progress" state for an already-delivered message.
+    private const val COMPLETED_TTL_MS = 5 * 60 * 1000L
+    private val completedMessages = ConcurrentHashMap<Int, Long>()
+
     data class ChunkMetadata(
         val totalChunks: Int,
         var receivedCount: Int = 0,
@@ -38,6 +43,20 @@ object MessageChunker {
         val totalChunks: Int,
         val data: ByteArray
     )
+
+    sealed class ChunkResult {
+        data class InProgress(
+            val messageId: Int,
+            val receivedChunks: Int,
+            val totalChunks: Int
+        ) : ChunkResult()
+
+        data class Complete(
+            val messageId: Int,
+            val totalChunks: Int,
+            val data: ByteArray
+        ) : ChunkResult()
+    }
 
     /**
      * Splits a message into chunks suitable for BLE advertising.
@@ -114,10 +133,23 @@ object MessageChunker {
 
     /**
      * Adds a received chunk and attempts to reassemble the complete message.
-     * Returns the complete message if all chunks have been received, null otherwise.
+     * Returns a [ChunkResult] describing progress, or a [ChunkResult.Complete] when
+     * all chunks have arrived. Returns null if the chunk could not be processed.
      */
-    fun addChunk(chunk: ChunkedMessage): ByteArray? {
+    fun addChunk(chunk: ChunkedMessage): ChunkResult? {
         val messageId = chunk.messageId
+
+        // Ignore duplicate chunks that arrive after a message has been fully
+        // reassembled — advertising repeats the same chunks for several seconds.
+        if (completedMessages.containsKey(messageId)) {
+            CodeFlowLogger.debug(
+                TAG, "Ignoring chunk for completed message", mapOf(
+                    "message_id" to messageId,
+                    "chunk_index" to chunk.chunkIndex
+                )
+            )
+            return null
+        }
 
         CodeFlowLogger.debug(
             TAG, "Received chunk", mapOf(
@@ -168,9 +200,12 @@ object MessageChunker {
                 offset += chunkData.size
             }
 
-            // Clean up
+            val totalChunks = metadata.totalChunks
+
+            // Clean up and mark as completed so later duplicates are ignored
             receivedChunks.remove(messageId)
             chunkMetadata.remove(messageId)
+            completedMessages[messageId] = System.currentTimeMillis()
 
             CodeFlowLogger.info(
                 TAG, "Message reassembled successfully", mapOf(
@@ -179,14 +214,23 @@ object MessageChunker {
                 )
             )
 
-            return completeMessage
+            return ChunkResult.Complete(
+                messageId = messageId,
+                totalChunks = totalChunks,
+                data = completeMessage
+            )
         }
 
-        return null
+        return ChunkResult.InProgress(
+            messageId = messageId,
+            receivedChunks = metadata.receivedCount,
+            totalChunks = metadata.totalChunks
+        )
     }
 
     /**
-     * Cleans up old incomplete messages (older than 5 minutes).
+     * Cleans up old incomplete messages and expired completed-message
+     * markers (anything older than 5 minutes).
      */
     fun cleanupOldChunks() {
         val now = System.currentTimeMillis()
@@ -201,5 +245,10 @@ object MessageChunker {
             chunkMetadata.remove(messageId)
             CodeFlowLogger.debug(TAG, "Cleaned up expired chunks", mapOf("message_id" to messageId))
         }
+
+        val expiredCompleted = completedMessages.filter { (_, completedAt) ->
+            now - completedAt > COMPLETED_TTL_MS
+        }.keys
+        expiredCompleted.forEach { completedMessages.remove(it) }
     }
 }

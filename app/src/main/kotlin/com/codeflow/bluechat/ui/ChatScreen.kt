@@ -1,12 +1,14 @@
 package com.codeflow.bluechat.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -17,10 +19,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.codeflow.bluechat.R
 import com.codeflow.bluechat.model.ChatMessage
+import com.codeflow.bluechat.model.ReceivingMessage
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -31,6 +37,7 @@ import java.util.*
 @Composable
 fun ChatScreen(
     messages: List<ChatMessage>,
+    receivingMessages: List<ReceivingMessage>,
     bleStatus: String,
     errorMessage: String?,
     onSendMessage: (String) -> Unit,
@@ -42,10 +49,11 @@ fun ChatScreen(
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    // Auto-scroll to bottom when new messages arrive
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+    val totalItems = messages.size + receivingMessages.size
+    // Auto-scroll to bottom when new messages or placeholders arrive
+    LaunchedEffect(totalItems) {
+        if (totalItems > 0) {
+            listState.animateScrollToItem(totalItems - 1)
         }
     }
 
@@ -59,9 +67,22 @@ fun ChatScreen(
     }
 
     Scaffold(
+        modifier = Modifier.imePadding(),
         topBar = {
             TopAppBar(
-                title = { Text("BlueChat") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_bluechat_logo),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("BlueChat")
+                    }
+                },
                 actions = {
                     // BLE Status indicator
                     Text(
@@ -98,11 +119,12 @@ fun ChatScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            if (messages.isEmpty()) {
+            if (messages.isEmpty() && receivingMessages.isEmpty()) {
                 EmptyState()
             } else {
                 MessageList(
                     messages = messages,
+                    receivingMessages = receivingMessages,
                     listState = listState,
                     onResendMessage = onResendMessage,
                     onDeleteMessage = onDeleteMessage,
@@ -165,6 +187,7 @@ fun MessageInput(
 @Composable
 fun MessageList(
     messages: List<ChatMessage>,
+    receivingMessages: List<ReceivingMessage>,
     listState: androidx.compose.foundation.lazy.LazyListState,
     onResendMessage: (String) -> Unit,
     onDeleteMessage: (String) -> Unit,
@@ -174,7 +197,7 @@ fun MessageList(
         state = listState,
         modifier = modifier,
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.Bottom)
     ) {
         items(messages, key = { it.id }) { message ->
             MessageBubble(
@@ -182,6 +205,9 @@ fun MessageList(
                 onResend = { onResendMessage(message.id) },
                 onDelete = { onDeleteMessage(message.id) }
             )
+        }
+        items(receivingMessages, key = { "receiving-${it.messageId}" }) { receiving ->
+            ReceivingBubble(receiving = receiving)
         }
     }
 }

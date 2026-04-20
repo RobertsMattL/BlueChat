@@ -10,6 +10,7 @@ import com.codeflow.bluechat.ble.BleScanner
 import com.codeflow.bluechat.crypto.MessageEncryption
 import com.codeflow.bluechat.model.BleStatus
 import com.codeflow.bluechat.model.ChatMessage
+import com.codeflow.bluechat.model.ReceivingMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,6 +39,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _passphrase = MutableStateFlow("BlueChat2026")
     val passphrase: StateFlow<String> = _passphrase.asStateFlow()
 
+    private val _receivingMessages = MutableStateFlow<Map<Int, ReceivingMessage>>(emptyMap())
+    val receivingMessages: StateFlow<Map<Int, ReceivingMessage>> = _receivingMessages.asStateFlow()
+
     // BLE components
     private var secretKey: SecretKeySpec = MessageEncryption.deriveKey(_passphrase.value)
     private var bleAdvertiser: BleAdvertiser? = null
@@ -50,9 +54,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun initializeBleComponents(context: Context) {
         bleAdvertiser = BleAdvertiser(context, secretKey)
-        bleScanner = BleScanner(context, secretKey) { message ->
-            handleReceivedMessage(message)
-        }
+        bleScanner = BleScanner(
+            context = context,
+            secretKey = secretKey,
+            onMessageReceived = { message, messageId ->
+                handleReceivedMessage(message, messageId)
+            },
+            onChunkProgress = { messageId, received, total ->
+                handleChunkProgress(messageId, received, total)
+            }
+        )
 
         // Check BLE support
         if (bleAdvertiser?.isSupported() != true) {
@@ -154,11 +165,39 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Handles a received message from BLE.
+     * Handles progress updates for an incoming chunked message.
      */
-    private fun handleReceivedMessage(content: String) {
+    private fun handleChunkProgress(messageId: Int, received: Int, total: Int) {
+        CodeFlowLogger.debug(TAG, "Chunk progress", mapOf(
+            "message_id" to messageId,
+            "received" to received,
+            "total" to total
+        ))
+        _receivingMessages.value = _receivingMessages.value +
+            (messageId to ReceivingMessage(
+                messageId = messageId,
+                receivedChunks = received,
+                totalChunks = total
+            ))
+    }
+
+    /**
+     * Handles a received message (or failed reassembly) from BLE.
+     */
+    private fun handleReceivedMessage(content: String?, messageId: Int) {
+        // Always clear the in-progress placeholder
+        _receivingMessages.value = _receivingMessages.value - messageId
+
+        if (content.isNullOrBlank()) {
+            CodeFlowLogger.warning(TAG, "Message reassembly finished without content", mapOf(
+                "message_id" to messageId
+            ))
+            return
+        }
+
         CodeFlowLogger.info(TAG, "Message received", mapOf(
-            "message_length" to content.length
+            "message_length" to content.length,
+            "message_id" to messageId
         ))
 
         val message = ChatMessage(
@@ -232,6 +271,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun clearMessages() {
         CodeFlowLogger.info(TAG, "Clearing all messages")
         _messages.value = emptyList()
+        _receivingMessages.value = emptyMap()
     }
 
     /**
